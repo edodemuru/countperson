@@ -6,7 +6,11 @@
 #include "esp_event.h"
 #include "esp_event_loop.h"
 
+#include <assert.h>   
 #include <stdio.h>
+#include <stdlib.h>
+#include <malloc.h>
+#include <realloc.h>
 
 #include "BluetoothSerial.h"
 
@@ -18,6 +22,10 @@
 #define	WIFI_CHANNEL_SWITCH_INTERVAL	(500)
 //1 minute
 //#define	WIFI_CHANNEL_SWITCH_INTERVAL	(60000)
+
+
+#define deltagrow 4         //termini per espansione lineare dell'array dinamico.//
+#define deltashrink 6      // con condiz. necessaria : delta shrink>deltagrow.
 
 // Current wifi channel
 int curChannel = 1;
@@ -76,6 +84,23 @@ typedef struct {
 	uint8_t payload[0]; /* network data ended with 4 bytes csum (CRC32) */
 } wifi_ieee80211_packet_t;
 
+//dynamic data structure to contain sniffed packets
+struct Sarray{
+	wifi_ieee80211_packet_t* vett; /*list of wifi_ieee80211 packets*/
+	int i;    /* riempimento corrente, non Ã¨ l'indice; l'indice Ã¨ i-1 (dell'ultimo elemento) */
+	int size; /* size */
+};
+typedef struct Sarray Tarray; 
+
+
+Tarray a;  //global data structure variable
+
+//function to manage data structure
+Tarray array_create(int lung);
+void array_destroy(Tarray* a);    
+void array_resize(Tarray* a, int newlung); //resize dynamic array
+void insert(Tarray* a, wifi_ieee80211_packet_t x);
+
 //Callback function
 static esp_err_t event_handler(void *ctx, system_event_t *event);
 //Change channel function
@@ -84,6 +109,50 @@ static void wifi_sniffer_set_channel(uint8_t channel);
 static const char *wifi_sniffer_packet_type2str(wifi_promiscuous_pkt_type_t type);
 //Callback function
 static void wifi_sniffer_packet_handler(void *buff, wifi_promiscuous_pkt_type_t type);
+
+
+
+//Implementazione prototipi array dinamico
+Tarray array_create(int lung){
+
+	Tarray arr;
+	arr.vett = (wifi_ieee80211_packet_t* )malloc(lung*sizeof(wifi_ieee80211_packet_t));
+	assert(a.vett!=NULL); //verifica che vettore Ã¨ diverso da NULL e che quindi Ã¨ stato allocato.
+	//ho incluso la libreria assert sopra
+  arr.i=lung;
+	arr.size=lung;
+
+	return arr;
+}
+
+void array_destroy(Tarray* a){
+
+free(a->vett);
+a->vett=NULL;
+a->i=0;
+a->size=0;
+
+
+}
+
+void array_resize(Tarray* a, int newlung){
+
+/*algoritmo con espansione geometrica*/
+if(newlung>a->size || newlung < (a->size-deltashrink)){
+	int nuovo=newlung+deltagrow;
+    a->vett=realloc(a->vett,nuovo*sizeof(wifi_ieee80211_packet_t));
+    a->size=nuovo;
+}
+	a->i=newlung;
+
+}
+
+void insert(Tarray* a, wifi_ieee80211_packet_t x){
+  
+  array_resize(a,a->i+1); 
+  a->vett[a->i-1]=x;
+  
+}
 
 
 esp_err_t event_handler(void *ctx, system_event_t *event)
@@ -117,6 +186,8 @@ void wifi_sniffer_packet_handler(void* buf, wifi_promiscuous_pkt_type_t type) { 
   const wifi_promiscuous_pkt_t *ppkt = (wifi_promiscuous_pkt_t *)buf;
 	const wifi_ieee80211_packet_t *ipkt = (wifi_ieee80211_packet_t *)ppkt->payload;
 	const wifi_ieee80211_mac_hdr_t *hdr = &ipkt->hdr;
+
+   insert(&a,*ipkt); //inserimento del pacchetto nella struttura
 
   printf("PACKET TYPE=%s, CHAN=%02d, RSSI=%02d,"
 		" ADDR1=%02x:%02x:%02x:%02x:%02x:%02x,"
@@ -179,8 +250,12 @@ wifi_sniffer_set_channel(uint8_t channel)
 
 //===== LOOP =====//
 void loop() {
+    a= array_create(0); //creo struttura dati array per contenere i pacchetti sniffati sul canale attuale su cui sto in ascolto
     gpio_set_level(LED_GPIO_PIN,level^=1);
     vTaskDelay(WIFI_CHANNEL_SWITCH_INTERVAL / portTICK_PERIOD_MS);
+
+    //dopo aver inviato i pacchetti faccio la destroy
+    array_destroy(&a);
     
     wifi_sniffer_set_channel(curChannel); //Change channel
     curChannel = (curChannel % WIFI_CHANNEL_MAX) + 1; //Set next channel
