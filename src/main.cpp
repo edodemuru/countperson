@@ -11,7 +11,6 @@
 #include "BluetoothSerial.h"
 
 
-int a = 0;
 //#define maxCh 13 //max Channel -> US = 11, EU = 13, Japan = 14
 #define	WIFI_CHANNEL_MAX		(13)
 #define	LED_GPIO_PIN			GPIO_NUM_4
