@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <malloc.h>
-#include <realloc.h>
+
 
 #include "BluetoothSerial.h"
 
@@ -117,7 +117,7 @@ Tarray array_create(int lung){
 
 	Tarray arr;
 	arr.vett = (wifi_ieee80211_packet_t* )malloc(lung*sizeof(wifi_ieee80211_packet_t));
-	assert(a.vett!=NULL); //verifica che vettore Ã¨ diverso da NULL e che quindi Ã¨ stato allocato.
+	assert(lung==0 || a.vett!=NULL); //verifica che vettore Ã¨ diverso da NULL e che quindi Ã¨ stato allocato.
 	//ho incluso la libreria assert sopra
   arr.i=lung;
 	arr.size=lung;
@@ -140,7 +140,8 @@ void array_resize(Tarray* a, int newlung){
 /*algoritmo con espansione geometrica*/
 if(newlung>a->size || newlung < (a->size-deltashrink)){
 	int nuovo=newlung+deltagrow;
-    a->vett=realloc(a->vett,nuovo*sizeof(wifi_ieee80211_packet_t));
+    a->vett=(wifi_ieee80211_packet_t *) realloc(a->vett,nuovo*sizeof(wifi_ieee80211_packet_t));
+    assert(nuovo == 0 || a->vett!= NULL);
     a->size=nuovo;
 }
 	a->i=newlung;
@@ -187,13 +188,15 @@ void wifi_sniffer_packet_handler(void* buf, wifi_promiscuous_pkt_type_t type) { 
 	const wifi_ieee80211_packet_t *ipkt = (wifi_ieee80211_packet_t *)ppkt->payload;
 	const wifi_ieee80211_mac_hdr_t *hdr = &ipkt->hdr;
 
+  /*if((hdr->frame_ctrl & 0xF00) != 0x400)
+    return;*/
+
    insert(&a,*ipkt); //inserimento del pacchetto nella struttura
 
-  printf("PACKET TYPE=%s, CHAN=%02d, RSSI=%02d,"
+  printf("PACKET TYPE=PROBE, CHAN=%02d, RSSI=%02d,"
 		" ADDR1=%02x:%02x:%02x:%02x:%02x:%02x,"
 		" ADDR2=%02x:%02x:%02x:%02x:%02x:%02x,"
 		" ADDR3=%02x:%02x:%02x:%02x:%02x:%02x\n",
-		wifi_sniffer_packet_type2str(type),
 		ppkt->rx_ctrl.channel,
 		ppkt->rx_ctrl.rssi,
 		/* ADDR1 */
@@ -254,6 +257,28 @@ void loop() {
     gpio_set_level(LED_GPIO_PIN,level^=1);
     vTaskDelay(WIFI_CHANNEL_SWITCH_INTERVAL / portTICK_PERIOD_MS);
 
+ 
+  for(int h=0;h<a.i;h++){
+   //stampo i-esimopacchetto matchato su quel canale
+   wifi_ieee80211_packet_t ipkt = a.vett[h];
+	 wifi_ieee80211_mac_hdr_t hdr = ipkt.hdr;
+
+     printf("PACKET MALNATI GAY"
+		" ADDR1=%02x:%02x:%02x:%02x:%02x:%02x,"
+		" ADDR2=%02x:%02x:%02x:%02x:%02x:%02x,"
+		" ADDR3=%02x:%02x:%02x:%02x:%02x:%02x\n",
+		
+		/* ADDR1 */
+		hdr.addr1[0],hdr.addr1[1],hdr.addr1[2],
+		hdr.addr1[3],hdr.addr1[4],hdr.addr1[5],
+		/* ADDR2 */
+		hdr.addr2[0],hdr.addr2[1],hdr.addr2[2],
+		hdr.addr2[3],hdr.addr2[4],hdr.addr2[5],
+		/* ADDR3 */
+		hdr.addr3[0],hdr.addr3[1],hdr.addr3[2],
+		hdr.addr3[3],hdr.addr3[4],hdr.addr3[5]
+     );
+	}
     //dopo aver inviato i pacchetti faccio la destroy
     array_destroy(&a);
     
