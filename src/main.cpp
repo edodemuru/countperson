@@ -11,8 +11,6 @@
 #include <stdlib.h>
 #include <malloc.h>
 
-
-#include "BluetoothSerial.h"
 #include <string.h>
 
 //#define maxCh 13 //max Channel -> US = 11, EU = 13, Japan = 14
@@ -34,9 +32,6 @@ int level = 0;
 String maclist[64][3]; 
 int listcount = 0;
 
-
-//Need this object to initialize the bluetooth stack
-BluetoothSerial SerialBT;
 
 //static wifi_country_t wifi_country = {.cc="CN", .schan=1, .nchan=13, .policy=WIFI_COUNTRY_POLICY_AUTO};
 
@@ -204,37 +199,6 @@ wifi_sniffer_packet_type2str(wifi_promiscuous_pkt_type_t type)
 	}
 }
 
-bool isProbeReq(int n) 
-{ 
-    // array to store binary number 
-    int binaryNum[16]; 
-  
-    // counter for binary array 
-    int i = 0; 
-    while (n > 0) { 
-  
-        // storing remainder in binary array 
-        binaryNum[i] = n % 2; 
-        n = n / 2; 
-        i++; 
-    } 
-    while(i!=15){
-      binaryNum[i] = 0;
-      i++;
-
-    }
-  
-    // printing binary array in reverse order 
-    //for (int j = 7; j >= 4; j--) 
-        //printf("%d",binaryNum[j]); 
-    //printf("\n");
-    //Filter probe request
-    if(binaryNum[7] == 0 && binaryNum[6] == 1 && binaryNum[5] == 0 && binaryNum[4] == 0)
-      return true;
-    else
-      return false;
-} 
-
 void wifi_sniffer_packet_handler(void* buf, wifi_promiscuous_pkt_type_t type) { //This is where packets end up after they get sniffed
 
   //Filter all packet types but MGMT
@@ -249,6 +213,8 @@ void wifi_sniffer_packet_handler(void* buf, wifi_promiscuous_pkt_type_t type) { 
 	const wifi_ieee80211_mac_hdr_t *hdr = &ipkt->hdr;
   // Pointer to the frame control section within the packet header
   const wifi_header_frame_control_t *frame_ctrl = (wifi_header_frame_control_t *)&hdr->frame_ctrl;
+
+  //insert(&a,*ipkt);
 
   //From now on, only probe request packet
   if(frame_ctrl->subtype != 4)
@@ -318,7 +284,7 @@ void setup() {
   
   Serial.println("Configuration complete");
 
-  SerialBT.begin("ESP32");
+
 }
 
 //Set channel
@@ -331,39 +297,38 @@ wifi_sniffer_set_channel(uint8_t channel)
 
 //===== LOOP =====//
 void loop() {
-  /*   a= array_create(0); //creo struttura dati array per contenere i pacchetti sniffati sul canale attuale su cui sto in ascolto */
+    //a= array_create(0); //creo struttura dati array per contenere i pacchetti sniffati sul canale attuale su cui sto in ascolto 
     gpio_set_level(LED_GPIO_PIN,level^=1);
     vTaskDelay(WIFI_CHANNEL_SWITCH_INTERVAL / portTICK_PERIOD_MS);
 
  
-  for(int h=0;h<a.i;h++){
+  /*for(int h=0;h<a.i;h++){*/
    //stampo i-esimopacchetto matchato su quel canale
-  /*  wifi_ieee80211_packet_t ipkt = a.vett[h];
-	 wifi_ieee80211_mac_hdr_t hdr = ipkt.hdr; */
+    /*wifi_ieee80211_packet_t ipkt = a.vett[h];
+	 wifi_ieee80211_mac_hdr_t hdr = ipkt.hdr; 
 
-    /*  printf("PACKET MALNATI"
+      printf("PACKET MALNATI"
 		" ADDR1=%02x:%02x:%02x:%02x:%02x:%02x,"
 		" ADDR2=%02x:%02x:%02x:%02x:%02x:%02x,"
 		" ADDR3=%02x:%02x:%02x:%02x:%02x:%02x\n", */
 		
 		/* ADDR1 */
-		/* hdr.addr1[0],hdr.addr1[1],hdr.addr1[2],
+		 /*hdr.addr1[0],hdr.addr1[1],hdr.addr1[2],
 		hdr.addr1[3],hdr.addr1[4],hdr.addr1[5], */
 		/* ADDR2 */
-		/* hdr.addr2[0],hdr.addr2[1],hdr.addr2[2],
+		 /*hdr.addr2[0],hdr.addr2[1],hdr.addr2[2],
 		hdr.addr2[3],hdr.addr2[4],hdr.addr2[5], */
 		/* ADDR3 */
-		/* hdr.addr3[0],hdr.addr3[1],hdr.addr3[2],
+		 /*hdr.addr3[0],hdr.addr3[1],hdr.addr3[2],
 		hdr.addr3[3],hdr.addr3[4],hdr.addr3[5]
-     ); */
-	}
+     ); 
+	}*/
     //dopo aver inviato i pacchetti faccio la destroy
-   /*  array_destroy(&a); */
+     /*array_destroy(&a); */
     
     wifi_sniffer_set_channel(curChannel); //Change channel
     curChannel = (curChannel % WIFI_CHANNEL_MAX) + 1; //Set next channel
     //Send something over bluetooth connection
-    SerialBT.println("Hello World");
     delay(500);
     
 }
