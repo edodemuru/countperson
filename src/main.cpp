@@ -67,10 +67,24 @@ typedef struct { // or this
   uint8_t mac[6];
 } __attribute__((packed)) MacAddr;
 
+typedef struct {
+     unsigned protocol:2;
+     unsigned type:2;
+     unsigned subtype:4;
+     unsigned to_ds:1;
+     unsigned from_ds:1;
+     unsigned more_frag:1;
+     unsigned retry:1;
+     unsigned pwr_mgmt:1;
+     unsigned more_data:1;
+     unsigned wep:1;
+     unsigned strict:1;
+  } wifi_header_frame_control_t;
+
 //Network packet header
 typedef struct {
-	unsigned frame_ctrl:16;
-	unsigned duration_id:16;
+  wifi_header_frame_control_t frame_ctrl;
+	//unsigned duration_id:16;
 	uint8_t addr1[6]; /* receiver address */
 	uint8_t addr2[6]; /* sender address */
 	uint8_t addr3[6]; /* filtering address */
@@ -81,8 +95,20 @@ typedef struct {
 //Network packet
 typedef struct {
 	wifi_ieee80211_mac_hdr_t hdr;
-	uint8_t payload[0]; /* network data ended with 4 bytes csum (CRC32) */
+	uint8_t payload[2]; /* network data ended with 4 bytes csum (CRC32) */
 } wifi_ieee80211_packet_t;
+
+typedef struct
+{
+  /*unsigned interval:16;
+  unsigned capability:16;*/
+  //unsigned tag_number:8;
+  unsigned tag_length:8;
+  char ssid[0];
+  uint8_t rates[1];
+
+} wifi_mgmt_probe_t;
+
 
 //dynamic data structure to contain sniffed packets
 struct Sarray{
@@ -215,26 +241,39 @@ void wifi_sniffer_packet_handler(void* buf, wifi_promiscuous_pkt_type_t type) { 
 	if (type != WIFI_PKT_MGMT)
 		return;
 
+  // First layer: type cast the received buffer into our generic SDK structure
   const wifi_promiscuous_pkt_t *ppkt = (wifi_promiscuous_pkt_t *)buf;
+  // Second layer: define pointer to where the actual 802.11 packet is within the structure
 	const wifi_ieee80211_packet_t *ipkt = (wifi_ieee80211_packet_t *)ppkt->payload;
+  // Third layer: define pointers to the 802.11 packet header and payload
 	const wifi_ieee80211_mac_hdr_t *hdr = &ipkt->hdr;
+  // Pointer to the frame control section within the packet header
+  const wifi_header_frame_control_t *frame_ctrl = (wifi_header_frame_control_t *)&hdr->frame_ctrl;
 
-  if(!isProbeReq(hdr->frame_ctrl))
+  //From now on, only probe request packet
+  if(frame_ctrl->subtype != 4)
     return;
 
-  //if((hdr->frame_ctrl & 0xff0f) != 0xff4f)
-  /*if((hdr->frame_ctrl & 65295) != 65359)
-    return;*/
+  const wifi_mgmt_probe_t *probe_frame = (wifi_mgmt_probe_t*) ipkt->payload;
+  char ssid[32] = {0};
 
-   /* insert(&a,*ipkt); //inserimento del pacchetto nella struttura */
+    if (probe_frame->tag_length >= 32)
+    {
+      strncpy(ssid, probe_frame->ssid, 31);
+    }
+    else
+    {
+      strncpy(ssid, probe_frame->ssid, probe_frame->tag_length);
+    }
 
 
 
-  printf("FRAME CTRL=%d, PACKET TYPE=PROBE, CHAN=%02d, RSSI=%02d,"
+
+  printf("PACKET TYPE=PROBE, CHAN=%02d, RSSI=%02d,"
 		" ADDR1=%02x:%02x:%02x:%02x:%02x:%02x,"
 		" ADDR2=%02x:%02x:%02x:%02x:%02x:%02x,"
-		" ADDR3=%02x:%02x:%02x:%02x:%02x:%02x\n",
-    hdr->frame_ctrl,
+		" ADDR3=%02x:%02x:%02x:%02x:%02x:%02x, "
+    " SSID: %s\n",
 		ppkt->rx_ctrl.channel,
 		ppkt->rx_ctrl.rssi,
 		/* ADDR1 */
@@ -245,7 +284,8 @@ void wifi_sniffer_packet_handler(void* buf, wifi_promiscuous_pkt_type_t type) { 
 		hdr->addr2[3],hdr->addr2[4],hdr->addr2[5],
 		/* ADDR3 */
 		hdr->addr3[0],hdr->addr3[1],hdr->addr3[2],
-		hdr->addr3[3],hdr->addr3[4],hdr->addr3[5]
+		hdr->addr3[3],hdr->addr3[4],hdr->addr3[5],
+    ssid
 	);
   
 	
