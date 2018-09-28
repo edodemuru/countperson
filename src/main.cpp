@@ -100,7 +100,7 @@ typedef struct {
 //Network packet header
 typedef struct {
   wifi_header_frame_control_t frame_ctrl;
-	unsigned duration_id:16;
+	//unsigned duration_id:16;
 	uint8_t addr1[6]; /* receiver address */
 	uint8_t addr2[6]; /* sender address */
 	uint8_t addr3[6]; /* filtering address */
@@ -114,16 +114,16 @@ typedef struct {
 	uint8_t payload[0]; /* network data ended with 4 bytes csum (CRC32) */
 } wifi_ieee80211_packet_t;
 
-typedef struct
+/*typedef struct
 {
   /*unsigned interval:16;
   unsigned capability:16;*/
   //unsigned tag_number:8;
-  unsigned tag_length:8;
+  /*unsigned tag_length:8;
   char ssid[0];
   uint8_t rates[1];
 
-} wifi_mgmt_probe_t;
+} wifi_mgmt_probe_t;*/
 
 
 //dynamic data structure to contain sniffed packets
@@ -338,8 +338,8 @@ void wifi_sniffer_packet_handler(void* buf, wifi_promiscuous_pkt_type_t type) { 
   if(frame_ctrl->subtype != 4)
     return;
 
-  const wifi_mgmt_probe_t *probe_frame = (wifi_mgmt_probe_t*) ipkt->payload;
-  char ssid[32] = {0};
+  //const wifi_mgmt_probe_t *probe_frame = (wifi_mgmt_probe_t*) ipkt->payload;
+  /*char ssid[32] = {0};
 
     if (probe_frame->tag_length >= 32)
     {
@@ -348,7 +348,7 @@ void wifi_sniffer_packet_handler(void* buf, wifi_promiscuous_pkt_type_t type) { 
     else
     {
       strncpy(ssid, probe_frame->ssid, probe_frame->tag_length);
-    }
+    }*/
 
 
 
@@ -356,8 +356,7 @@ void wifi_sniffer_packet_handler(void* buf, wifi_promiscuous_pkt_type_t type) { 
   printf("PACKET TYPE=PROBE, CHAN=%02d, RSSI=%02d,"
 		" ADDR1=%02x:%02x:%02x:%02x:%02x:%02x,"
 		" ADDR2=%02x:%02x:%02x:%02x:%02x:%02x,"
-		" ADDR3=%02x:%02x:%02x:%02x:%02x:%02x, "
-    " SSID: %s\n",
+		" ADDR3=%02x:%02x:%02x:%02x:%02x:%02x\n",
 		ppkt->rx_ctrl.channel,
 		ppkt->rx_ctrl.rssi,
 		/* ADDR1 */
@@ -368,8 +367,7 @@ void wifi_sniffer_packet_handler(void* buf, wifi_promiscuous_pkt_type_t type) { 
 		hdr->addr2[3],hdr->addr2[4],hdr->addr2[5],
 		/* ADDR3 */
 		hdr->addr3[0],hdr->addr3[1],hdr->addr3[2],
-		hdr->addr3[3],hdr->addr3[4],hdr->addr3[5],
-    ssid
+		hdr->addr3[3],hdr->addr3[4],hdr->addr3[5]
 	);
   
 	
@@ -400,7 +398,7 @@ void setup() {
   esp_wifi_set_promiscuous(true);
   //esp_wifi_set_promiscuous_filter(&filt); //Filter mac address??
   esp_wifi_set_promiscuous_rx_cb(&wifi_sniffer_packet_handler); //Register callback function
-
+  esp_wifi_set_channel(curChannel,WIFI_SECOND_CHAN_NONE);
   gpio_set_direction(LED_GPIO_PIN, GPIO_MODE_OUTPUT);
   
   Serial.println("Configuration complete");
@@ -451,9 +449,10 @@ void loop() {
     
     
 
-    wifi_sniffer_set_channel(curChannel); //Change channel
+    //wifi_sniffer_set_channel(curChannel); //Change channel
     printf("Current channel %d\n",curChannel);
     curChannel = (curChannel % WIFI_CHANNEL_MAX) + 1; //Set next channel
+    esp_wifi_set_channel(curChannel, WIFI_SECOND_CHAN_NONE);
     //esp_wifi_set_promiscuous(false);
     /*stop = true;
     printf("End listening\n");
