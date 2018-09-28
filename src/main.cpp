@@ -31,15 +31,17 @@
 #define MESSAGE "HelloTCPServer"
 #define TCPServerIP "192.168.137.1" //ip del server nella rete in questione
 
+bool stop = false;
+
 
 
 //#define maxCh 13 //max Channel -> US = 11, EU = 13, Japan = 14
 #define	WIFI_CHANNEL_MAX		(13)
 #define	LED_GPIO_PIN			GPIO_NUM_4
 //500 ms
-#define	WIFI_CHANNEL_SWITCH_INTERVAL	(100)
+//#define	WIFI_CHANNEL_SWITCH_INTERVAL	(5000)
 //1 minute
-//#define	WIFI_CHANNEL_SWITCH_INTERVAL	(60000)
+#define	WIFI_CHANNEL_SWITCH_INTERVAL	(60000)
 //#define	WIFI_CHANNEL_SWITCH_INTERVAL	(5000)
 
 
@@ -70,8 +72,6 @@ String KnownMac[10][2] = {  // Put devices you want to be reconized
 };
 
 String defaultTTL = "60"; // Maximum time (Apx seconds) elapsed before device is consirded offline
-
-static void wifi_sniffer_set_channel(uint8_t channel);
 
 const wifi_promiscuous_filter_t filt={ //Idk what this does
     .filter_mask=WIFI_PROMIS_FILTER_MASK_MGMT|WIFI_PROMIS_FILTER_MASK_DATA
@@ -317,6 +317,8 @@ wifi_sniffer_packet_type2str(wifi_promiscuous_pkt_type_t type)
 
 void wifi_sniffer_packet_handler(void* buf, wifi_promiscuous_pkt_type_t type) { //This is where packets end up after they get sniffed
 
+  if(stop)
+   return; 
   //Filter all packet types but MGMT
 	if (type != WIFI_PKT_MGMT)
 		return;
@@ -418,7 +420,9 @@ wifi_sniffer_set_channel(uint8_t channel)
 void loop() {
     //a= array_create(0); //creo struttura dati array per contenere i pacchetti sniffati sul canale attuale su cui sto in ascolto 
     gpio_set_level(LED_GPIO_PIN,level^=1);
+    printf("Start listening\n");
     vTaskDelay(WIFI_CHANNEL_SWITCH_INTERVAL / portTICK_PERIOD_MS);
+
 
  
   /*for(int h=0;h<a.i;h++){*/
@@ -450,10 +454,13 @@ void loop() {
     wifi_sniffer_set_channel(curChannel); //Change channel
     printf("Current channel %d\n",curChannel);
     curChannel = (curChannel % WIFI_CHANNEL_MAX) + 1; //Set next channel
-    esp_wifi_set_promiscuous(false);
+    //esp_wifi_set_promiscuous(false);
+    /*stop = true;
+    printf("End listening\n");
     //xTaskCreate(&tcp_client,"tcp_client",4048,NULL,5,NULL);//creo un task e lo aggiungo alla lista dei task pronti ad essere eseguiti
     tcp_client();
-    esp_wifi_set_promiscuous(true);
-    //delay(500);
+    stop = false;*/
+    //esp_wifi_set_promiscuous(true);
+    delay(500);
     
 }
