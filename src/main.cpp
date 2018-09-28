@@ -32,13 +32,15 @@
 #define TCPServerIP "192.168.137.1" //ip del server nella rete in questione
 
 
+
 //#define maxCh 13 //max Channel -> US = 11, EU = 13, Japan = 14
 #define	WIFI_CHANNEL_MAX		(13)
 #define	LED_GPIO_PIN			GPIO_NUM_4
 //500 ms
-#define	WIFI_CHANNEL_SWITCH_INTERVAL	(500)
+#define	WIFI_CHANNEL_SWITCH_INTERVAL	(100)
 //1 minute
 //#define	WIFI_CHANNEL_SWITCH_INTERVAL	(60000)
+//#define	WIFI_CHANNEL_SWITCH_INTERVAL	(5000)
 
 
 #define deltagrow 4         //termini per espansione lineare dell'array dinamico.//
@@ -244,7 +246,8 @@ static void initialise_wifi(void)//funzione di inizializzazione del modulo wifi
     ESP_ERROR_CHECK( esp_wifi_start() );
 }
 
-void tcp_client(void *pvParam){
+/*void tcp_client(void *pvParam){*/
+void tcp_client(){
     ESP_LOGI(TAG,"tcp_client task started \n");//stampa in output
     /*inizializzazione socket*/
     struct sockaddr_in tcpServerAddr;
@@ -262,6 +265,7 @@ void tcp_client(void *pvParam){
             continue;
         }
         ESP_LOGI(TAG, "... allocated socket\n");
+        printf( "... allocated socket\n");
          if(connect(s, (struct sockaddr *)&tcpServerAddr, sizeof(tcpServerAddr)) != 0) {//mi connetto al server
             //codice eseguito in caso di errore nella connect
             ESP_LOGE(TAG, "... socket connect failed errno=%d \n", errno);
@@ -270,6 +274,7 @@ void tcp_client(void *pvParam){
             continue;
         }
         ESP_LOGI(TAG, "... connected \n");
+        printf("...connected\n");
         if( write(s , MESSAGE , strlen(MESSAGE)) < 0)//invio il messaggio
         {
             ESP_LOGE(TAG, "... Send failed \n");
@@ -278,19 +283,24 @@ void tcp_client(void *pvParam){
             continue;
         }
         ESP_LOGI(TAG, "... socket send success");
+        printf("... socket send success\n");
         do {
             bzero(recv_buf, sizeof(recv_buf));
             r = read(s, recv_buf, sizeof(recv_buf)-1);
             for(int i = 0; i < r; i++) {
-                putchar(recv_buf[i]);
+                //putchar(recv_buf[i]);
+                printf("%c",recv_buf[i]);
             }
         } while(r > 0);
         ESP_LOGI(TAG, "... done reading from socket. Last read return=%d errno=%d\r\n", r, errno);
+        printf("... done reading from socket. Last read return=%d errno=%d\r\n", r, errno);
         close(s);
-        ESP_LOGI(TAG, "... new request in 5 seconds");
-        vTaskDelay(5000 / portTICK_PERIOD_MS);
+        printf("Sending complete\n");
+        return;
+        //ESP_LOGI(TAG, "... new request in 5 seconds");
+        //vTaskDelay(5000 / portTICK_PERIOD_MS);
     }
-    ESP_LOGI(TAG, "...tcp_client task closed\n");
+    //ESP_LOGI(TAG, "...tcp_client task closed\n");
 }
 
 
@@ -389,8 +399,6 @@ void setup() {
   //esp_wifi_set_promiscuous_filter(&filt); //Filter mac address??
   esp_wifi_set_promiscuous_rx_cb(&wifi_sniffer_packet_handler); //Register callback function
 
-  xTaskCreate(&tcp_client,"tcp_client",4048,NULL,5,NULL);//creo un task e lo aggiungo alla lista dei task pronti ad essere eseguiti
-
   gpio_set_direction(LED_GPIO_PIN, GPIO_MODE_OUTPUT);
   
   Serial.println("Configuration complete");
@@ -440,8 +448,12 @@ void loop() {
     
 
     wifi_sniffer_set_channel(curChannel); //Change channel
+    printf("Current channel %d\n",curChannel);
     curChannel = (curChannel % WIFI_CHANNEL_MAX) + 1; //Set next channel
-    //Send something over bluetooth connection
-    delay(500);
+    esp_wifi_set_promiscuous(false);
+    //xTaskCreate(&tcp_client,"tcp_client",4048,NULL,5,NULL);//creo un task e lo aggiungo alla lista dei task pronti ad essere eseguiti
+    tcp_client();
+    esp_wifi_set_promiscuous(true);
+    //delay(500);
     
 }
