@@ -100,7 +100,7 @@ typedef struct {
 //Network packet header
 typedef struct {
   wifi_header_frame_control_t frame_ctrl;
-	//unsigned duration_id:16;
+	unsigned duration_id:16;
 	uint8_t addr1[6]; /* receiver address */
 	uint8_t addr2[6]; /* sender address */
 	uint8_t addr3[6]; /* filtering address */
@@ -111,7 +111,7 @@ typedef struct {
 //Network packet
 typedef struct {
 	wifi_ieee80211_mac_hdr_t hdr;
-	uint8_t payload[2]; /* network data ended with 4 bytes csum (CRC32) */
+	uint8_t payload[0]; /* network data ended with 4 bytes csum (CRC32) */
 } wifi_ieee80211_packet_t;
 
 typedef struct
