@@ -26,8 +26,8 @@
 
 
 #define BIT0 (1 << 0)
-#define SSID "ESP_32"
-#define PASSPHARSE "12345678"//ssid e password della rete a cui mi voglio collegare
+#define SSID "edoHotspot"
+#define PASSPHARSE "pippoinamerica"//ssid e password della rete a cui mi voglio collegare
 #define MESSAGE "HelloTCPServer"
 #define TCPServerIP "192.168.1.1" //ip del server nella rete in questione
 
