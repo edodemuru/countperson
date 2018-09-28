@@ -24,6 +24,8 @@
 #include "lwip/netdb.h"
 #include "lwip/dns.h"
 
+//commit giuseppe
+
 
 #define BIT0 (1 << 0)
 #define SSID "edoHotspot"
