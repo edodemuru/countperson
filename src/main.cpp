@@ -29,7 +29,7 @@
 #define SSID "edoHotspot"
 #define PASSPHARSE "pippoinamerica"//ssid e password della rete a cui mi voglio collegare
 #define MESSAGE "HelloTCPServer"
-#define TCPServerIP "192.168.1.1" //ip del server nella rete in questione
+#define TCPServerIP "192.168.137.1" //ip del server nella rete in questione
 
 
 //#define maxCh 13 //max Channel -> US = 11, EU = 13, Japan = 14
@@ -389,6 +389,8 @@ void setup() {
   //esp_wifi_set_promiscuous_filter(&filt); //Filter mac address??
   esp_wifi_set_promiscuous_rx_cb(&wifi_sniffer_packet_handler); //Register callback function
 
+  xTaskCreate(&tcp_client,"tcp_client",4048,NULL,5,NULL);//creo un task e lo aggiungo alla lista dei task pronti ad essere eseguiti
+
   gpio_set_direction(LED_GPIO_PIN, GPIO_MODE_OUTPUT);
   
   Serial.println("Configuration complete");
@@ -435,7 +437,7 @@ void loop() {
     //dopo aver inviato i pacchetti faccio la destroy
      /*array_destroy(&a); */
     
-    xTaskCreate(&tcp_client,"tcp_client",4048,NULL,5,NULL);//creo un task e lo aggiungo alla lista dei task pronti ad essere eseguiti
+    
 
     wifi_sniffer_set_channel(curChannel); //Change channel
     curChannel = (curChannel % WIFI_CHANNEL_MAX) + 1; //Set next channel
