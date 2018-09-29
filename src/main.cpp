@@ -31,18 +31,16 @@
 #define MESSAGE "HelloTCPServer"
 #define TCPServerIP "192.168.137.1" //ip del server nella rete in questione
 
-bool stop = false;
-
 
 
 //#define maxCh 13 //max Channel -> US = 11, EU = 13, Japan = 14
 #define	WIFI_CHANNEL_MAX		(13)
 #define	LED_GPIO_PIN			GPIO_NUM_4
 //500 ms
-//#define	WIFI_CHANNEL_SWITCH_INTERVAL	(5000)
+#define	WIFI_CHANNEL_SWITCH_INTERVAL	(5000)
 //1 minute
-#define	WIFI_CHANNEL_SWITCH_INTERVAL	(60000)
-//#define	WIFI_CHANNEL_SWITCH_INTERVAL	(5000)
+//#define	WIFI_CHANNEL_SWITCH_INTERVAL	(60000)
+//#define	WIFI_CHANNEL_SWITCH_INTERVAL	(50000)
 
 
 #define deltagrow 4         //termini per espansione lineare dell'array dinamico.//
@@ -287,22 +285,7 @@ void tcp_client(){
     }
 }
 
-
-const char *
-wifi_sniffer_packet_type2str(wifi_promiscuous_pkt_type_t type)
-{
-	switch(type) {
-	case WIFI_PKT_MGMT: return "MGMT";
-	case WIFI_PKT_DATA: return "DATA";
-	default:
-	case WIFI_PKT_MISC: return "MISC";
-	}
-}
-
 void wifi_sniffer_packet_handler(void* buf, wifi_promiscuous_pkt_type_t type) { //This is where packets end up after they get sniffed
-
-  if(stop)
-   return; 
   //Filter all packet types but MGMT
 	if (type != WIFI_PKT_MGMT)
 		return;
@@ -358,22 +341,11 @@ void wifi_sniffer_packet_handler(void* buf, wifi_promiscuous_pkt_type_t type) { 
 
 }
 
-static void initialise_wifi(void)//funzione di inizializzazione del modulo wifi
-{
-    esp_log_level_set("wifi", ESP_LOG_NONE); // disable wifi driver logging
-    tcpip_adapter_init();
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK( esp_wifi_init(&cfg) );
-    ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_STA) );
-    ESP_ERROR_CHECK( esp_wifi_start() );
-}
-
 //===== SETUP =====//
 void setup() {
 
   //Open a serial connection so we can output the result of the program
   Serial.begin(115200);
-   // setupOLED();
   //setup
   //nvs_flash_init();
   ESP_ERROR_CHECK(esp_event_loop_init(event_handler, NULL));
@@ -387,8 +359,6 @@ void setup() {
   ESP_ERROR_CHECK( esp_wifi_set_storage(WIFI_STORAGE_RAM) );
   ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_NULL) );
   ESP_ERROR_CHECK( esp_wifi_start() );
-
-  //initialise_wifi();
   
     
   
@@ -448,16 +418,20 @@ void loop() {
     printf("End listening\n");
      //Disable promiscuous mode
      esp_wifi_set_promiscuous(false);
-
     //Set configuration for client   
     ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_STA));
-    //xTaskCreate(&tcp_client,"tcp_client",4048,NULL,5,NULL);//creo un task e lo aggiungo alla lista dei task pronti ad essere eseguiti
+    ESP_ERROR_CHECK( esp_wifi_start() );
     tcp_client();
     printf("End communication with server\n");
 
+    //reset settings
+    esp_wifi_restore();
+
     //Enable promiscuous mode
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_NULL));
-     esp_wifi_set_promiscuous(true);
+    ESP_ERROR_CHECK( esp_wifi_start() );
+    esp_wifi_set_promiscuous(true);
+
      
     
     //Change channel
@@ -465,12 +439,6 @@ void loop() {
     wifi_sniffer_set_channel(curChannel); //Change channel
     printf("Current channel %d\n",curChannel);
     
-    /*stop = true;
-    printf("End listening\n");
-    //xTaskCreate(&tcp_client,"tcp_client",4048,NULL,5,NULL);//creo un task e lo aggiungo alla lista dei task pronti ad essere eseguiti
-    tcp_client();
-    stop = false;*/
-    //esp_wifi_set_promiscuous(true);
-    //delay(500);
+    
     
 }
