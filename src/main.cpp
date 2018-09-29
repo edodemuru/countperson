@@ -111,7 +111,7 @@ typedef struct {
 //Network packet
 typedef struct {
 	wifi_ieee80211_mac_hdr_t hdr;
-	uint8_t payload[0]; /* network data ended with 4 bytes csum (CRC32) */
+	uint8_t payload[2]; /* network data ended with 4 bytes csum (CRC32) */
 } wifi_ieee80211_packet_t;
 
 /*typedef struct
@@ -236,19 +236,9 @@ esp_err_t event_handler(void *ctx, system_event_t *event)
   return ESP_OK;
 }
 
-static void initialise_wifi(void)//funzione di inizializzazione del modulo wifi
-{
-    esp_log_level_set("wifi", ESP_LOG_NONE); // disable wifi driver logging
-    tcpip_adapter_init();
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK( esp_wifi_init(&cfg) );
-    ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_STA) );
-    ESP_ERROR_CHECK( esp_wifi_start() );
-}
-
-/*void tcp_client(void *pvParam){*/
+//void tcp_client(void *pvParam){
 void tcp_client(){
-    ESP_LOGI(TAG,"tcp_client task started \n");//stampa in output
+    printf("tcp_client task started \n");
     /*inizializzazione socket*/
     struct sockaddr_in tcpServerAddr;
     tcpServerAddr.sin_addr.s_addr = inet_addr(TCPServerIP);
@@ -264,7 +254,6 @@ void tcp_client(){
             vTaskDelay(1000 / portTICK_PERIOD_MS);
             continue;
         }
-        ESP_LOGI(TAG, "... allocated socket\n");
         printf( "... allocated socket\n");
          if(connect(s, (struct sockaddr *)&tcpServerAddr, sizeof(tcpServerAddr)) != 0) {//mi connetto al server
             //codice eseguito in caso di errore nella connect
@@ -273,7 +262,6 @@ void tcp_client(){
             vTaskDelay(4000 / portTICK_PERIOD_MS);
             continue;
         }
-        ESP_LOGI(TAG, "... connected \n");
         printf("...connected\n");
         if( write(s , MESSAGE , strlen(MESSAGE)) < 0)//invio il messaggio
         {
@@ -282,7 +270,6 @@ void tcp_client(){
             vTaskDelay(4000 / portTICK_PERIOD_MS);
             continue;
         }
-        ESP_LOGI(TAG, "... socket send success");
         printf("... socket send success\n");
         do {
             bzero(recv_buf, sizeof(recv_buf));
@@ -292,15 +279,12 @@ void tcp_client(){
                 printf("%c",recv_buf[i]);
             }
         } while(r > 0);
-        ESP_LOGI(TAG, "... done reading from socket. Last read return=%d errno=%d\r\n", r, errno);
         printf("... done reading from socket. Last read return=%d errno=%d\r\n", r, errno);
         close(s);
         printf("Sending complete\n");
         return;
-        //ESP_LOGI(TAG, "... new request in 5 seconds");
-        //vTaskDelay(5000 / portTICK_PERIOD_MS);
+        
     }
-    //ESP_LOGI(TAG, "...tcp_client task closed\n");
 }
 
 
@@ -374,6 +358,16 @@ void wifi_sniffer_packet_handler(void* buf, wifi_promiscuous_pkt_type_t type) { 
 
 }
 
+static void initialise_wifi(void)//funzione di inizializzazione del modulo wifi
+{
+    esp_log_level_set("wifi", ESP_LOG_NONE); // disable wifi driver logging
+    tcpip_adapter_init();
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK( esp_wifi_init(&cfg) );
+    ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_STA) );
+    ESP_ERROR_CHECK( esp_wifi_start() );
+}
+
 //===== SETUP =====//
 void setup() {
 
@@ -382,9 +376,11 @@ void setup() {
    // setupOLED();
   //setup
   //nvs_flash_init();
-  tcpip_adapter_init();
   ESP_ERROR_CHECK(esp_event_loop_init(event_handler, NULL));
    wifi_event_group = xEventGroupCreate();//creo un nuovo gruppo di eventi
+   esp_log_level_set("wifi", ESP_LOG_NONE); // disable wifi driver logging
+  tcpip_adapter_init();
+  
   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
   ESP_ERROR_CHECK( esp_wifi_init(&cfg) );
 	//ESP_ERROR_CHECK( esp_wifi_set_country(&wifi_country) );/* set country for channel range [1, 13] */
@@ -392,13 +388,15 @@ void setup() {
   ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_NULL) );
   ESP_ERROR_CHECK( esp_wifi_start() );
 
-  initialise_wifi();
+  //initialise_wifi();
+  
+    
   
   //Set promiscuous mode
   esp_wifi_set_promiscuous(true);
   //esp_wifi_set_promiscuous_filter(&filt); //Filter mac address??
+ 
   esp_wifi_set_promiscuous_rx_cb(&wifi_sniffer_packet_handler); //Register callback function
-  esp_wifi_set_channel(curChannel,WIFI_SECOND_CHAN_NONE);
   gpio_set_direction(LED_GPIO_PIN, GPIO_MODE_OUTPUT);
   
   Serial.println("Configuration complete");
@@ -446,20 +444,33 @@ void loop() {
 	}*/
     //dopo aver inviato i pacchetti faccio la destroy
      /*array_destroy(&a); */
-    
-    
 
-    //wifi_sniffer_set_channel(curChannel); //Change channel
-    printf("Current channel %d\n",curChannel);
+    printf("End listening\n");
+     //Disable promiscuous mode
+     esp_wifi_set_promiscuous(false);
+
+    //Set configuration for client   
+    ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_STA));
+    //xTaskCreate(&tcp_client,"tcp_client",4048,NULL,5,NULL);//creo un task e lo aggiungo alla lista dei task pronti ad essere eseguiti
+    tcp_client();
+    printf("End communication with server\n");
+
+    //Enable promiscuous mode
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_NULL));
+     esp_wifi_set_promiscuous(true);
+     
+    
+    //Change channel
     curChannel = (curChannel % WIFI_CHANNEL_MAX) + 1; //Set next channel
-    esp_wifi_set_channel(curChannel, WIFI_SECOND_CHAN_NONE);
-    //esp_wifi_set_promiscuous(false);
+    wifi_sniffer_set_channel(curChannel); //Change channel
+    printf("Current channel %d\n",curChannel);
+    
     /*stop = true;
     printf("End listening\n");
     //xTaskCreate(&tcp_client,"tcp_client",4048,NULL,5,NULL);//creo un task e lo aggiungo alla lista dei task pronti ad essere eseguiti
     tcp_client();
     stop = false;*/
     //esp_wifi_set_promiscuous(true);
-    delay(500);
+    //delay(500);
     
 }
