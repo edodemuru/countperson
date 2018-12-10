@@ -26,6 +26,8 @@
 
 
 #define BIT0 (1 << 0)
+
+//Impostazioni per connettersi al server
 #define SSID "edoHotspot"
 #define PASSPHARSE "pippoinamerica"//ssid e password della rete a cui mi voglio collegare
 #define MESSAGE "HelloTCPServer"
@@ -241,7 +243,7 @@ void tcp_client(){
     struct sockaddr_in tcpServerAddr;
     tcpServerAddr.sin_addr.s_addr = inet_addr(TCPServerIP);
     tcpServerAddr.sin_family = AF_INET;
-    tcpServerAddr.sin_port = htons( 3010 );//3010 è la porta alla quale intendiamo collegarci
+    tcpServerAddr.sin_port = htons( 8888 );//8888 è la porta alla quale intendiamo collegarci
     int s, r;
     char recv_buf[64];//buffer di ricezione
     while(1){
