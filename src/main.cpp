@@ -39,9 +39,9 @@
 #define	WIFI_CHANNEL_MAX		(13)
 #define	LED_GPIO_PIN			GPIO_NUM_4
 //500 ms
-#define	WIFI_CHANNEL_SWITCH_INTERVAL	(5000)
+//#define	WIFI_CHANNEL_SWITCH_INTERVAL	(5000)
 //1 minute
-//#define	WIFI_CHANNEL_SWITCH_INTERVAL	(60000)
+#define	WIFI_CHANNEL_SWITCH_INTERVAL	(60000)
 //#define	WIFI_CHANNEL_SWITCH_INTERVAL	(50000)
 
 
@@ -73,16 +73,17 @@ String KnownMac[10][2] = {  // Put devices you want to be reconized
 
 String defaultTTL = "60"; // Maximum time (Apx seconds) elapsed before device is consirded offline
 
-const wifi_promiscuous_filter_t filt={ //Idk what this does
+const wifi_promiscuous_filter_t filt={ 
     .filter_mask=WIFI_PROMIS_FILTER_MASK_MGMT|WIFI_PROMIS_FILTER_MASK_DATA
 };
 
 
 
-typedef struct { // or this
+typedef struct { 
   uint8_t mac[6];
 } __attribute__((packed)) MacAddr;
 
+//Frame control flags
 typedef struct {
      unsigned protocol:2;
      unsigned type:2;
@@ -97,7 +98,7 @@ typedef struct {
      unsigned strict:1;
   } wifi_header_frame_control_t;
 
-//Network packet header
+//Network packet header (MAC header)
 typedef struct {
   wifi_header_frame_control_t frame_ctrl;
 	//unsigned duration_id:16;
@@ -108,22 +109,16 @@ typedef struct {
 	uint8_t addr4[6]; /* optional */
 } wifi_ieee80211_mac_hdr_t;
 
+
 //Network packet
 typedef struct {
+  //Network packet header (Mac)
 	wifi_ieee80211_mac_hdr_t hdr;
-	uint8_t payload[2]; /* network data ended with 4 bytes csum (CRC32) */
+  //uint8_t payload [2];
+	uint8_t payload[0]; /* network data ended with 4 bytes csum (CRC32) */
 } wifi_ieee80211_packet_t;
 
-/*typedef struct
-{
-  /*unsigned interval:16;
-  unsigned capability:16;*/
-  //unsigned tag_number:8;
-  /*unsigned tag_length:8;
-  char ssid[0];
-  uint8_t rates[1];
 
-} wifi_mgmt_probe_t;*/
 
 
 //dynamic data structure to contain sniffed packets
@@ -307,19 +302,20 @@ void wifi_sniffer_packet_handler(void* buf, wifi_promiscuous_pkt_type_t type) { 
   if(frame_ctrl->subtype != 4)
     return;
 
-  //const wifi_mgmt_probe_t *probe_frame = (wifi_mgmt_probe_t*) ipkt->payload;
-  /*char ssid[32] = {0};
+    //ssid length (25th byte of payload)
+    uint8_t length = ppkt->payload[25];
 
-    if (probe_frame->tag_length >= 32)
-    {
-      strncpy(ssid, probe_frame->ssid, 31);
+
+if(length!=0){
+    printf("SSID=");
+    for(uint8_t i = 0; i<length; i++){
+      printf("%c",ppkt->payload[i+26]);
     }
-    else
-    {
-      strncpy(ssid, probe_frame->ssid, probe_frame->tag_length);
-    }*/
-
-
+    printf(", ");
+    }
+else{
+      printf("SSID=NONE, ");
+    }
 
 
   printf("PACKET TYPE=PROBE, CHAN=%02d, RSSI=%02d,"
