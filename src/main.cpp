@@ -206,6 +206,7 @@ void tcp_client(){
         printf("... done reading from socket. Last read return=%d errno=%d\r\n", r, errno);
         close(s);
         printf("Sending complete\n");
+        dataToSend.clear();
         return;
         
     }
