@@ -1,3 +1,4 @@
+using namespace std;
 #include <WiFi.h>
 #include <Wire.h>
 
@@ -10,8 +11,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <malloc.h>
+#include <string>
 
-#include <string.h>
+//#include <string.h>
 
 #include "freertos/FreeRTOS.h"//kernel di sistema operativo in real-time usato nei dispositivi embedded
 #include "freertos/task.h"
@@ -23,6 +25,7 @@
 #include "lwip/sys.h"
 #include "lwip/netdb.h"
 #include "lwip/dns.h"
+#include <vector>
 
 
 #define BIT0 (1 << 0)
@@ -41,8 +44,8 @@
 //500 ms
 //#define	WIFI_CHANNEL_SWITCH_INTERVAL	(5000)
 //1 minute
-#define	WIFI_CHANNEL_SWITCH_INTERVAL	(60000)
-//#define	WIFI_CHANNEL_SWITCH_INTERVAL	(50000)
+//#define	WIFI_CHANNEL_SWITCH_INTERVAL	(60000)
+#define	WIFI_CHANNEL_SWITCH_INTERVAL	(50000)
 
 
 #define deltagrow 4         //termini per espansione lineare dell'array dinamico.//
@@ -57,19 +60,6 @@ int listcount = 0;
 
 
 //static wifi_country_t wifi_country = {.cc="CN", .schan=1, .nchan=13, .policy=WIFI_COUNTRY_POLICY_AUTO};
-
-String KnownMac[10][2] = {  // Put devices you want to be reconized
-  {"HPPC","7429AFE7D6A5"},
-  {"Will-PC","E894Fffffff3"},
-  {"TOMMASO","A09169B83748"},
-  {"MARIA ROSARIA","A471744F5EA6"},
-  {"NAME","MACADDRESS"},
-  {"NAME","MACADDRESS"},
-  {"NAME","MACADDRESS"},
-  {"NAME","MACADDRESS"}
-  
-  
-};
 
 String defaultTTL = "60"; // Maximum time (Apx seconds) elapsed before device is consirded offline
 
@@ -118,79 +108,17 @@ typedef struct {
 	uint8_t payload[0]; /* network data ended with 4 bytes csum (CRC32) */
 } wifi_ieee80211_packet_t;
 
-
-
-
-//dynamic data structure to contain sniffed packets
-struct Sarray{
-	wifi_ieee80211_packet_t* vett; /*list of wifi_ieee80211 packets*/
-	int i;    /* riempimento corrente, non Ã¨ l'indice; l'indice Ã¨ i-1 (dell'ultimo elemento) */
-	int size; /* size */
-};
-typedef struct Sarray Tarray; 
-
-
-Tarray a;  //global data structure variable
-
-//function to manage data structure
-Tarray array_create(int lung);
-void array_destroy(Tarray* a);    
-void array_resize(Tarray* a, int newlung); //resize dynamic array
-void insert(Tarray* a, wifi_ieee80211_packet_t x);
+vector<char> dataToSend;
 
 //Callback function
 static esp_err_t event_handler(void *ctx, system_event_t *event);
 //Change channel function
 static void wifi_sniffer_set_channel(uint8_t channel);
 //Packet to string function
-static const char *wifi_sniffer_packet_type2str(wifi_promiscuous_pkt_type_t type);
+//static const char *wifi_sniffer_packet_type2str(wifi_promiscuous_pkt_type_t type);
 //Callback function
 static void wifi_sniffer_packet_handler(void *buff, wifi_promiscuous_pkt_type_t type);
 
-
-
-//Implementazione prototipi array dinamico
-Tarray array_create(int lung){
-
-	Tarray arr;
-	arr.vett = (wifi_ieee80211_packet_t* )malloc(lung*sizeof(wifi_ieee80211_packet_t));
-	assert(lung==0 || a.vett!=NULL); //verifica che vettore Ã¨ diverso da NULL e che quindi Ã¨ stato allocato.
-	//ho incluso la libreria assert sopra
-  arr.i=lung;
-	arr.size=lung;
-
-	return arr;
-}
-
-void array_destroy(Tarray* a){
-
-free(a->vett);
-a->vett=NULL;
-a->i=0;
-a->size=0;
-
-
-}
-
-void array_resize(Tarray* a, int newlung){
-
-/*algoritmo con espansione geometrica*/
-if(newlung>a->size || newlung < (a->size-deltashrink)){
-	int nuovo=newlung+deltagrow;
-    a->vett=(wifi_ieee80211_packet_t *) realloc(a->vett,nuovo*sizeof(wifi_ieee80211_packet_t));
-    assert(nuovo == 0 || a->vett!= NULL);
-    a->size=nuovo;
-}
-	a->i=newlung;
-
-}
-
-void insert(Tarray* a, wifi_ieee80211_packet_t x){
-  
-  array_resize(a,a->i+1); 
-  a->vett[a->i-1]=x;
-  
-}
 
 static EventGroupHandle_t wifi_event_group;//variabile che identifica un gruppo di eventi wifi(RTOS)
 const int CONNECTED_BIT = BIT0;
@@ -231,34 +159,36 @@ esp_err_t event_handler(void *ctx, system_event_t *event)
   return ESP_OK;
 }
 
-//void tcp_client(void *pvParam){
 void tcp_client(){
     printf("tcp_client task started \n");
-    /*inizializzazione socket*/
+    //Socket inizialization
     struct sockaddr_in tcpServerAddr;
     tcpServerAddr.sin_addr.s_addr = inet_addr(TCPServerIP);
     tcpServerAddr.sin_family = AF_INET;
-    tcpServerAddr.sin_port = htons( 8888 );//8888 è la porta alla quale intendiamo collegarci
+    tcpServerAddr.sin_port = htons( 8888 );//8888 is the port to which we connect
     int s, r;
-    char recv_buf[64];//buffer di ricezione
+    char recv_buf[64];//Reception buffer
     while(1){
         xEventGroupWaitBits(wifi_event_group,CONNECTED_BIT,false,true,100);
-        s = socket(AF_INET, SOCK_STREAM, 0);//creo il socket
-        if(s < 0) {//errore nella funzione socket
+        s = socket(AF_INET, SOCK_STREAM, 0);//Socket's creation
+        if(s < 0) { //Error in socket function
             ESP_LOGE(TAG, "... Failed to allocate socket.\n");
             vTaskDelay(1000 / portTICK_PERIOD_MS);
             continue;
         }
         printf( "... allocated socket\n");
-         if(connect(s, (struct sockaddr *)&tcpServerAddr, sizeof(tcpServerAddr)) != 0) {//mi connetto al server
-            //codice eseguito in caso di errore nella connect
+         if(connect(s, (struct sockaddr *)&tcpServerAddr, sizeof(tcpServerAddr)) != 0) { //Connection to server
+            // Code executed in case of error in connect function
             ESP_LOGE(TAG, "... socket connect failed errno=%d \n", errno);
             close(s);
             vTaskDelay(4000 / portTICK_PERIOD_MS);
             continue;
         }
         printf("...connected\n");
-        if( write(s , MESSAGE , strlen(MESSAGE)) < 0)//invio il messaggio
+        // Pointer to char vector
+        char* dataTosendChar = &dataToSend[0];
+        //Send data
+        if( write(s ,dataTosendChar, dataToSend.size()) < 0)
         {
             ESP_LOGE(TAG, "... Send failed \n");
             close(s);
@@ -270,7 +200,6 @@ void tcp_client(){
             bzero(recv_buf, sizeof(recv_buf));
             r = read(s, recv_buf, sizeof(recv_buf)-1);
             for(int i = 0; i < r; i++) {
-                //putchar(recv_buf[i]);
                 printf("%c",recv_buf[i]);
             }
         } while(r > 0);
@@ -281,6 +210,51 @@ void tcp_client(){
         
     }
 }
+
+//Function to insert channel number into char vector
+void insertChanIntoData(int num){
+    if(num<10){
+        dataToSend.push_back(num +'0');
+    }else{
+        dataToSend.push_back('1');
+        dataToSend.push_back((num-10)+'0');
+    }
+    dataToSend.push_back(' ');
+}
+
+//Function to insert rssi value into char vector
+void insertRssiIntoData(int rssi){
+     if(rssi>-10){
+        dataToSend.push_back('-');
+        dataToSend.push_back(rssi + '0');
+    }else if(rssi>-100){
+        char intchar[3];
+        sprintf(intchar,"%d",rssi);
+        dataToSend.push_back(intchar[0]);
+        dataToSend.push_back(intchar[1]);
+        dataToSend.push_back(intchar[2]);
+    } else if(rssi == -100){
+        char intchar[4];
+        sprintf(intchar,"%d",rssi);
+        dataToSend.push_back(intchar[0]);
+        dataToSend.push_back(intchar[1]);
+        dataToSend.push_back(intchar[2]);
+        dataToSend.push_back(intchar[3]);
+
+    }
+    dataToSend.push_back(' ');
+}
+
+//Function to insert address into char vector
+void insertAddrIntoData(uint8_t addr1,uint8_t addr2, uint8_t addr3, uint8_t addr4, uint8_t addr5, uint8_t addr6){
+    char addrChar[18];
+    sprintf(addrChar,"%02x:%02x:%02x:%02x:%02x:%02x",addr1,addr2, addr3, addr4, addr5, addr6);
+    for(int i=0;i<17;i++){
+        dataToSend.push_back(addrChar[i]);
+    }
+
+}
+
 
 void wifi_sniffer_packet_handler(void* buf, wifi_promiscuous_pkt_type_t type) { //This is where packets end up after they get sniffed
   //Filter all packet types but MGMT
@@ -296,7 +270,7 @@ void wifi_sniffer_packet_handler(void* buf, wifi_promiscuous_pkt_type_t type) { 
   // Pointer to the frame control section within the packet header
   const wifi_header_frame_control_t *frame_ctrl = (wifi_header_frame_control_t *)&hdr->frame_ctrl;
 
-  //insert(&a,*ipkt);
+  
 
   //From now on, only probe request packet
   if(frame_ctrl->subtype != 4)
@@ -305,19 +279,26 @@ void wifi_sniffer_packet_handler(void* buf, wifi_promiscuous_pkt_type_t type) { 
     //ssid length (25th byte of payload)
     uint8_t length = ppkt->payload[25];
 
-
+//Print array and insert it into char vector
 if(length!=0){
     printf("SSID=");
     for(uint8_t i = 0; i<length; i++){
       printf("%c",ppkt->payload[i+26]);
+      dataToSend.push_back(ppkt->payload[i+26]);
     }
     printf(", ");
     }
 else{
       printf("SSID=NONE, ");
+      string n = "None";
+      for(int i=0; i<n.size();i++){
+          dataToSend.push_back(n[i]);
+      }
+    
     }
+dataToSend.push_back(' ');
 
-
+//Print address,rssi and channel
   printf("PACKET TYPE=PROBE, CHAN=%02d, RSSI=%02d,"
 		" ADDR1=%02x:%02x:%02x:%02x:%02x:%02x,"
 		" ADDR2=%02x:%02x:%02x:%02x:%02x:%02x,"
@@ -334,7 +315,12 @@ else{
 		hdr->addr3[0],hdr->addr3[1],hdr->addr3[2],
 		hdr->addr3[3],hdr->addr3[4],hdr->addr3[5]
 	);
-  
+
+    insertChanIntoData(ppkt->rx_ctrl.channel);
+    insertRssiIntoData(ppkt->rx_ctrl.rssi);
+    insertAddrIntoData(hdr->addr2[0],hdr->addr2[1],hdr->addr2[2],hdr->addr2[3],hdr->addr2[4],hdr->addr2[5]);
+    dataToSend.push_back(';');
+    dataToSend.push_back('\n');
 	
 
 }
@@ -347,13 +333,13 @@ void setup() {
   //setup
   //nvs_flash_init();
   ESP_ERROR_CHECK(esp_event_loop_init(event_handler, NULL));
-   wifi_event_group = xEventGroupCreate();//creo un nuovo gruppo di eventi
+   wifi_event_group = xEventGroupCreate();//create new group of events
    esp_log_level_set("wifi", ESP_LOG_NONE); // disable wifi driver logging
   tcpip_adapter_init();
   
   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
   ESP_ERROR_CHECK( esp_wifi_init(&cfg) );
-	//ESP_ERROR_CHECK( esp_wifi_set_country(&wifi_country) );/* set country for channel range [1, 13] */
+  //ESP_ERROR_CHECK( esp_wifi_set_country(&wifi_country) );/* set country for channel range [1, 13] */
   ESP_ERROR_CHECK( esp_wifi_set_storage(WIFI_STORAGE_RAM) );
   ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_NULL) );
   ESP_ERROR_CHECK( esp_wifi_start() );
@@ -362,7 +348,6 @@ void setup() {
   
   //Set promiscuous mode
   esp_wifi_set_promiscuous(true);
-  //esp_wifi_set_promiscuous_filter(&filt); //Filter mac address??
  
   esp_wifi_set_promiscuous_rx_cb(&wifi_sniffer_packet_handler); //Register callback function
   gpio_set_direction(LED_GPIO_PIN, GPIO_MODE_OUTPUT);
@@ -381,37 +366,11 @@ wifi_sniffer_set_channel(uint8_t channel)
 }
 
 //===== LOOP =====//
-void loop() {
-    //a= array_create(0); //creo struttura dati array per contenere i pacchetti sniffati sul canale attuale su cui sto in ascolto 
+void loop() { 
     gpio_set_level(LED_GPIO_PIN,level^=1);
     printf("Start listening\n");
     vTaskDelay(WIFI_CHANNEL_SWITCH_INTERVAL / portTICK_PERIOD_MS);
 
-
- 
-  /*for(int h=0;h<a.i;h++){*/
-   //stampo i-esimopacchetto matchato su quel canale
-    /*wifi_ieee80211_packet_t ipkt = a.vett[h];
-	 wifi_ieee80211_mac_hdr_t hdr = ipkt.hdr; 
-
-      printf("PACKET MALNATI"
-		" ADDR1=%02x:%02x:%02x:%02x:%02x:%02x,"
-		" ADDR2=%02x:%02x:%02x:%02x:%02x:%02x,"
-		" ADDR3=%02x:%02x:%02x:%02x:%02x:%02x\n", */
-		
-		/* ADDR1 */
-		 /*hdr.addr1[0],hdr.addr1[1],hdr.addr1[2],
-		hdr.addr1[3],hdr.addr1[4],hdr.addr1[5], */
-		/* ADDR2 */
-		 /*hdr.addr2[0],hdr.addr2[1],hdr.addr2[2],
-		hdr.addr2[3],hdr.addr2[4],hdr.addr2[5], */
-		/* ADDR3 */
-		 /*hdr.addr3[0],hdr.addr3[1],hdr.addr3[2],
-		hdr.addr3[3],hdr.addr3[4],hdr.addr3[5]
-     ); 
-	}*/
-    //dopo aver inviato i pacchetti faccio la destroy
-     /*array_destroy(&a); */
 
     printf("End listening\n");
      //Disable promiscuous mode
@@ -419,6 +378,11 @@ void loop() {
     //Set configuration for client   
     ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK( esp_wifi_start() );
+
+    for(int i=0;i<dataToSend.size();i++){
+        printf("%c",dataToSend[i]);
+    }
+    //Activate socket and send data
     tcp_client();
     printf("End communication with server\n");
 
