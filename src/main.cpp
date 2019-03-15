@@ -27,12 +27,25 @@ using namespace std;
 #include "lwip/dns.h"
 #include <vector>
 
+#include <chrono>
+#include <hash_map>
+#include <rom/md5_hash.h>
+#include <time.h>
+#include "time.h"
+#include <WiFiUdp.h>
+
+
+using namespace std::chrono;
 
 #define BIT0 (1 << 0)
 
 //Impostazioni per connettersi al server
 #define SSID "edoHotspot"
 #define PASSPHARSE "pippoinamerica"//ssid e password della rete a cui mi voglio collegare
+
+/*#define SSID "PC-GIUSEPPE 6693"
+#define PASSPHARSE "729Zg987"
+*/
 #define MESSAGE "HelloTCPServer"
 #define TCPServerIP "192.168.137.1" //ip del server nella rete in questione
 
@@ -42,26 +55,14 @@ using namespace std;
 #define	WIFI_CHANNEL_MAX		(13)
 #define	LED_GPIO_PIN			GPIO_NUM_4
 //500 ms
-//#define	WIFI_CHANNEL_SWITCH_INTERVAL	(5000)
+#define	WIFI_CHANNEL_SWITCH_INTERVAL	(5000)
 //1 minute
 //#define	WIFI_CHANNEL_SWITCH_INTERVAL	(60000)
-#define	WIFI_CHANNEL_SWITCH_INTERVAL	(50000)
+//#define	WIFI_CHANNEL_SWITCH_INTERVAL	(50000)
 
 
 #define deltagrow 4         //termini per espansione lineare dell'array dinamico.//
 #define deltashrink 6      // con condiz. necessaria : delta shrink>deltagrow.
-
-// Current wifi channel
-int curChannel = 1;
-int level = 0;
-
-String maclist[64][3]; 
-int listcount = 0;
-
-
-//static wifi_country_t wifi_country = {.cc="CN", .schan=1, .nchan=13, .policy=WIFI_COUNTRY_POLICY_AUTO};
-
-String defaultTTL = "60"; // Maximum time (Apx seconds) elapsed before device is consirded offline
 
 const wifi_promiscuous_filter_t filt={ 
     .filter_mask=WIFI_PROMIS_FILTER_MASK_MGMT|WIFI_PROMIS_FILTER_MASK_DATA
@@ -108,8 +109,6 @@ typedef struct {
 	uint8_t payload[0]; /* network data ended with 4 bytes csum (CRC32) */
 } wifi_ieee80211_packet_t;
 
-vector<char> dataToSend;
-
 //Callback function
 static esp_err_t event_handler(void *ctx, system_event_t *event);
 //Change channel function
@@ -123,6 +122,38 @@ static void wifi_sniffer_packet_handler(void *buff, wifi_promiscuous_pkt_type_t 
 static EventGroupHandle_t wifi_event_group;//variabile che identifica un gruppo di eventi wifi(RTOS)
 const int CONNECTED_BIT = BIT0;
 static const char *TAG="tcp_client";
+
+
+// Current wifi channel
+int curChannel = 1;
+int level = 0;
+
+//Interface wifi
+wifi_interface_t ifx;
+
+//Mac esp32
+uint8_t macEsp32[6];
+
+//Boolean to identify if esp32 is connecting for the first time to server
+boolean firstConnection;
+
+//Data to send to server
+vector<char> dataToSend;
+
+/*//Uri server ntp
+const char* ntpServer = "time.windows.com";
+//Offset seconds
+const long  gmtOffset_sec = 3600;
+const int   daylightOffset_sec = 3600;*/
+//Timestamp obtained by Esp32
+time_t timeEsp;
+//Timestamp used by packets
+string timestamp;
+//Timestamp given from server
+struct tm tmFromServer = {0};
+//Timestamp obtained from server
+string tmFromServerStr;
+
 void wifi_connect(){//collega la scheda alla rete wifi specificata
     wifi_config_t cfg = {
       .sta ={SSID,PASSPHARSE}
@@ -212,6 +243,15 @@ void tcp_client(){
     }
 }
 
+void insertMacIntoData(){
+    char macEsp32Char[18];
+    sprintf(macEsp32Char,"%02x:%02x:%02x:%02x:%02x:%02x",macEsp32[0],macEsp32[1],macEsp32[2],macEsp32[3],macEsp32[4],macEsp32[5]);
+     for(int i=0;i<17;i++){
+        dataToSend.push_back(macEsp32Char[i]);
+    }
+
+}
+
 //Function to insert channel number into char vector
 void insertChanIntoData(int num){
     if(num<10){
@@ -254,6 +294,15 @@ void insertAddrIntoData(uint8_t addr1,uint8_t addr2, uint8_t addr3, uint8_t addr
         dataToSend.push_back(addrChar[i]);
     }
 
+}
+
+void dateToTimestamp(){
+
+}
+
+void getTimestamp()
+{
+  
 }
 
 
@@ -316,6 +365,8 @@ dataToSend.push_back(' ');
 		hdr->addr3[0],hdr->addr3[1],hdr->addr3[2],
 		hdr->addr3[3],hdr->addr3[4],hdr->addr3[5]
 	);
+    //Print timestamp
+    getTimestamp();
 
     insertChanIntoData(ppkt->rx_ctrl.channel);
     insertRssiIntoData(ppkt->rx_ctrl.rssi);
@@ -339,12 +390,20 @@ void setup() {
   tcpip_adapter_init();
   
   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+  //Connection to wifi
   ESP_ERROR_CHECK( esp_wifi_init(&cfg) );
-  //ESP_ERROR_CHECK( esp_wifi_set_country(&wifi_country) );/* set country for channel range [1, 13] */
+
   ESP_ERROR_CHECK( esp_wifi_set_storage(WIFI_STORAGE_RAM) );
+
+  //Disable promiscuous mode
+    /* esp_wifi_set_promiscuous(false);
+    //Set configuration for client   
+    ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK( esp_wifi_start() );*/
+
+
   ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_NULL) );
   ESP_ERROR_CHECK( esp_wifi_start() );
-  
     
   
   //Set promiscuous mode
@@ -352,6 +411,18 @@ void setup() {
  
   esp_wifi_set_promiscuous_rx_cb(&wifi_sniffer_packet_handler); //Register callback function
   gpio_set_direction(LED_GPIO_PIN, GPIO_MODE_OUTPUT);
+
+  //Configure interface
+  ifx = WIFI_IF_STA;
+  //Obtain mac
+  esp_wifi_get_mac(ifx,macEsp32);
+
+  //Config this as first connection to server
+  firstConnection = true;
+
+ //init and get the time
+  //configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+
   
   Serial.println("Configuration complete");
 
@@ -366,13 +437,53 @@ wifi_sniffer_set_channel(uint8_t channel)
 	esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
 }
 
+//Insert request of connection into dataToSend
+void insertConnectionRequest(){
+    dataToSend.push_back('R');
+}
+
+//Function for first connection
+void firstConnectionToServer(){
+    //Insert data for first connection
+    insertConnectionRequest();
+    //Connect to server
+    //Disable promiscuous mode
+     esp_wifi_set_promiscuous(false);
+    //Set configuration for client   
+    ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK( esp_wifi_start() );
+
+    tcp_client();
+
+    //Renable options for future connections
+    insertMacIntoData();
+    dataToSend.push_back(';');
+    dataToSend.push_back('\n');
+
+     //reset settings
+    esp_wifi_restore();
+
+    //Enable promiscuous mode
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_NULL));
+    ESP_ERROR_CHECK( esp_wifi_start() );
+    esp_wifi_set_promiscuous(true);
+}
+
 //===== LOOP =====//
 void loop() { 
     gpio_set_level(LED_GPIO_PIN,level^=1);
+    insertMacIntoData();
+    dataToSend.push_back(';');
+    dataToSend.push_back('\n');
+
+   /*if(firstConnection){
+        firstConnectionToServer();
+        firstConnection = false;
+        
+    }*/
+
     printf("Start listening\n");
     vTaskDelay(WIFI_CHANNEL_SWITCH_INTERVAL / portTICK_PERIOD_MS);
-
-
     printf("End listening\n");
      //Disable promiscuous mode
      esp_wifi_set_promiscuous(false);
@@ -380,9 +491,6 @@ void loop() {
     ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK( esp_wifi_start() );
 
-    for(int i=0;i<dataToSend.size();i++){
-        printf("%c",dataToSend[i]);
-    }
     //Activate socket and send data
     tcp_client();
     printf("End communication with server\n");
@@ -401,6 +509,8 @@ void loop() {
     curChannel = (curChannel % WIFI_CHANNEL_MAX) + 1; //Set next channel
     wifi_sniffer_set_channel(curChannel); //Change channel
     printf("Current channel %d\n",curChannel);
+
+    
     
     
     
