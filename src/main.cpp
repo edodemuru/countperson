@@ -242,12 +242,6 @@ void setTime(struct tm tempTime){
 
 //Retutn struct tm from timestamp
 struct tm dateToTimestamp() {
-    printf("\nDATA ");
-    for(int i=0;i<19;i++){
-        printf("%c", tmFromServerChar[i]);
-        
-    }
-    printf("\n");
 
     //Time when the esp32 must start sniffing
     struct tm tm_work;
@@ -265,19 +259,6 @@ struct tm dateToTimestamp() {
     return tm_work;
 }
 
-double getTimestamp()
-{
-    
-  time_t timer;
-  struct tm * timeinfo;
-  time(&timer);
-  timeinfo = localtime (&timer);
-  printf ("\nTempo registrato dalla scheda: %s\n", asctime(timeinfo));
-  printf("\nTimestamp dal server prima del calcolo: %d/%d/%d %d:%d:%d\n",timeWork.tm_mday,timeWork.tm_mon,timeWork.tm_year,timeWork.tm_hour,timeWork.tm_min,timeWork.tm_sec);
-  double seconds = difftime(timer,mktime(&timeWork));
-  printf("\nSecondi: %.1f\n", seconds);
-  return seconds;
-}
 
 void tcp_client(){
     printf("tcp_client task started \n");
@@ -322,6 +303,7 @@ void tcp_client(){
 
             for(int i = 0; i < r; i++) {
                 printf("%c",dataReceived[i]);
+                //Save timestamp into array
                 tmFromServerChar[i] = dataReceived[i];
             }
         } while(r > 0);
@@ -387,7 +369,32 @@ void insertAddrIntoData(uint8_t addr1,uint8_t addr2, uint8_t addr3, uint8_t addr
     for(int i=0;i<17;i++){
         dataToSend.push_back(addrChar[i]);
     }
+    dataToSend.push_back(' ');
+}
 
+void insertTimestampIntoData()
+{  
+  time_t timer;
+  struct tm * timeinfo;
+  char timestampCharData[26];
+  //Obtain actual timer
+  time(&timer);
+  //Translate time_t into struct tm
+  timeinfo = localtime (&timer);
+  printf ("\nTempo registrato dalla scheda: %s\n", asctime(timeinfo));
+  printf("\nTimestamp dal server prima del calcolo: %d/%d/%d %d:%d:%d\n",timeWork.tm_mday,timeWork.tm_mon,timeWork.tm_year,timeWork.tm_hour,timeWork.tm_min,timeWork.tm_sec);
+  //Calculate diffence in seconds between timestamps
+  double seconds = difftime(timer,mktime(&timeWork));
+  printf("\nTimestamp: %.1f\n", seconds);
+
+  sprintf(timestampCharData,"%s",asctime(timeinfo));
+
+ 
+
+  for(int i=0;i<24;i++){
+      
+        dataToSend.push_back(timestampCharData[i]);
+    }
 }
 
 
@@ -451,12 +458,13 @@ dataToSend.push_back(' ');
 		hdr->addr3[3],hdr->addr3[4],hdr->addr3[5]
 	);
     //Print timestamp
-    double timestamp = getTimestamp();
-    printf(",Timestamp=%.f\n",timestamp);
+    //time_t timestamp = getTimestamp();
+    //printf(",Timestamp=%.1f\n",timestamp);
 
     insertChanIntoData(ppkt->rx_ctrl.channel);
     insertRssiIntoData(ppkt->rx_ctrl.rssi);
     insertAddrIntoData(hdr->addr2[0],hdr->addr2[1],hdr->addr2[2],hdr->addr2[3],hdr->addr2[4],hdr->addr2[5]);
+    insertTimestampIntoData();
     dataToSend.push_back(';');
     dataToSend.push_back('\n');
 	
@@ -486,6 +494,7 @@ void setup() {
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
 
   //setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 0);
+  Serial.print("Connection to server NTP ");
   while(time(nullptr) <= 100000) {
     Serial.print(".");
     delay(100);
@@ -540,6 +549,28 @@ void insertConnectionRequest(){
     dataToSend.push_back('R');
 }
 
+//Esp32 waits so that every esp32 starts at the same moment
+void waitTime(){
+  time_t now;
+  double seconds;
+
+  time(&now);  /* get current time; same as: now = time(NULL)  */
+  //Difference between time sent by server and internal time of esp32
+  seconds = difftime(mktime(&timeWork),now);
+
+  printf("Number of seconds to wait : %1.f\n",seconds);
+  //Wait some seconds
+  delay(seconds * 1000);
+
+   //reset settings
+   esp_wifi_restore();
+
+    //Enable promiscuous mode
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_NULL));
+    ESP_ERROR_CHECK( esp_wifi_start() );
+    esp_wifi_set_promiscuous(true);
+}
+
 //Function for first connection
 void firstConnectionToServer(){
     //Insert data for first connection
@@ -557,13 +588,7 @@ void firstConnectionToServer(){
     insertMacIntoData();
     dataToSend.push_back(';');
 
-     //reset settings
-    esp_wifi_restore();
-
-    //Enable promiscuous mode
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_NULL));
-    ESP_ERROR_CHECK( esp_wifi_start() );
-    esp_wifi_set_promiscuous(true);
+     
 }
 
 //===== LOOP =====//
@@ -579,6 +604,8 @@ void loop() {
         
     }
 
+    waitTime();
+
     printf("Start listening\n");
     vTaskDelay(WIFI_CHANNEL_SWITCH_INTERVAL / portTICK_PERIOD_MS);
     printf("End listening\n");
@@ -593,12 +620,12 @@ void loop() {
     printf("End communication with server\n");
 
     //reset settings
-    esp_wifi_restore();
+    /*esp_wifi_restore();
 
     //Enable promiscuous mode
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_NULL));
     ESP_ERROR_CHECK( esp_wifi_start() );
-    esp_wifi_set_promiscuous(true);
+    esp_wifi_set_promiscuous(true);*/
 
      
     
