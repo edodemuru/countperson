@@ -30,6 +30,7 @@ using namespace std;
 #include <chrono>
 #include <hash_map>
 #include <rom/md5_hash.h>
+#include "mbedtls/md.h"
 #include <time.h>
 #include "time.h"
 #include <WiFiUdp.h>
@@ -158,6 +159,8 @@ struct tm timeWork = {0};
 char tmFromServerChar[19];
 //Receipt buffer
 char dataReceived[64];
+
+vector<char> packetSniffed;
 
 const char* ntpServer = "time.windows.com";
 const long  gmtOffset_sec = 3600;
@@ -332,24 +335,33 @@ void insertMacIntoData(){
 void insertChanIntoData(int num){
     if(num<10){
         dataToSend.push_back(num +'0');
+        packetSniffed.push_back(num +'0');
     }else{
         dataToSend.push_back('1');
+        packetSniffed.push_back('1');
         dataToSend.push_back((num-10)+'0');
+        packetSniffed.push_back((num-10)+'0');
     }
     dataToSend.push_back(' ');
+    packetSniffed.push_back(' ');
 }
 
 //Function to insert rssi value into char vector
 void insertRssiIntoData(int rssi){
      if(rssi>-10){
         dataToSend.push_back('-');
+        packetSniffed.push_back('-');
         dataToSend.push_back(rssi + '0');
+        packetSniffed.push_back(rssi + '0');
     }else if(rssi>-100){
         char intchar[3];
         sprintf(intchar,"%d",rssi);
         dataToSend.push_back(intchar[0]);
+        packetSniffed.push_back(intchar[0]);
         dataToSend.push_back(intchar[1]);
+        packetSniffed.push_back(intchar[1]);
         dataToSend.push_back(intchar[2]);
+        packetSniffed.push_back(intchar[2]);
     } else if(rssi == -100){
         char intchar[4];
         sprintf(intchar,"%d",rssi);
@@ -357,9 +369,14 @@ void insertRssiIntoData(int rssi){
         dataToSend.push_back(intchar[1]);
         dataToSend.push_back(intchar[2]);
         dataToSend.push_back(intchar[3]);
+        packetSniffed.push_back(intchar[0]);
+        packetSniffed.push_back(intchar[1]);
+        packetSniffed.push_back(intchar[2]);
+        packetSniffed.push_back(intchar[3]);
 
     }
     dataToSend.push_back(' ');
+    packetSniffed.push_back(' ');
 }
 
 //Function to insert address into char vector
@@ -368,9 +385,12 @@ void insertAddrIntoData(uint8_t addr1,uint8_t addr2, uint8_t addr3, uint8_t addr
     sprintf(addrChar,"%02x:%02x:%02x:%02x:%02x:%02x",addr1,addr2, addr3, addr4, addr5, addr6);
     for(int i=0;i<17;i++){
         dataToSend.push_back(addrChar[i]);
+        packetSniffed.push_back(addrChar[i]);
     }
     dataToSend.push_back(' ');
+    packetSniffed.push_back(' ');
 }
+
 
 void insertTimestampIntoData()
 {  
@@ -394,7 +414,50 @@ void insertTimestampIntoData()
   for(int i=0;i<24;i++){
       
         dataToSend.push_back(timestampCharData[i]);
+        packetSniffed.push_back(timestampCharData[i]);
     }
+
+    dataToSend.push_back(' ');
+    packetSniffed.push_back(' ');
+
+    
+}
+
+void calcHash(){
+  packetSniffed.push_back('\0');
+  char *payload = &packetSniffed[0];
+  byte shaResult[32];
+ 
+  mbedtls_md_context_t ctx;
+  mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
+ 
+  const size_t payloadLength = strlen(payload);         
+ 
+  mbedtls_md_init(&ctx);
+  mbedtls_md_setup(&ctx, mbedtls_md_info_from_type(md_type), 0);
+  mbedtls_md_starts(&ctx);
+  mbedtls_md_update(&ctx, (const unsigned char *) payload, payloadLength-1);
+  mbedtls_md_finish(&ctx, shaResult);
+  mbedtls_md_free(&ctx);
+
+  printf("Dati di cui calcolo l'hash\n");
+  for(int i= 0; i<strlen(payload); i++){
+      printf("%c", payload[i]);
+  }
+  printf("\n");
+ 
+  Serial.print("Hash: ");
+ 
+  for(int i= 0; i<sizeof(shaResult); i++){
+      char str[3];
+ 
+      sprintf(str, "%02x", (int)shaResult[i]);
+      dataToSend.push_back(str[0]);
+      dataToSend.push_back(str[1]);
+      Serial.print(str);
+    }
+    printf("\n");
+    packetSniffed.clear();
 }
 
 
@@ -427,6 +490,7 @@ if(length!=0){
     for(uint8_t i = 0; i<length; i++){
       printf("%c",ppkt->payload[i+26]);
       dataToSend.push_back(ppkt->payload[i+26]);
+      packetSniffed.push_back(ppkt->payload[i+26]);
     }
     printf(", ");
     }
@@ -435,10 +499,12 @@ else{
       string n = "None";
       for(int i=0; i<n.size();i++){
           dataToSend.push_back(n[i]);
+          packetSniffed.push_back(n[i]);
       }
     
     }
 dataToSend.push_back(' ');
+packetSniffed.push_back(' ');
 
 //Print address,rssi and channel
   printf("PACKET TYPE=PROBE, CHAN=%02d, RSSI=%02d,"
@@ -465,6 +531,7 @@ dataToSend.push_back(' ');
     insertRssiIntoData(ppkt->rx_ctrl.rssi);
     insertAddrIntoData(hdr->addr2[0],hdr->addr2[1],hdr->addr2[2],hdr->addr2[3],hdr->addr2[4],hdr->addr2[5]);
     insertTimestampIntoData();
+    calcHash();
     dataToSend.push_back(';');
     dataToSend.push_back('\n');
 	
@@ -491,6 +558,7 @@ void setup() {
 
   ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_STA));
   ESP_ERROR_CHECK( esp_wifi_start() );
+
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
 
   //setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 0);
@@ -560,7 +628,7 @@ void waitTime(){
 
   printf("Number of seconds to wait : %1.f\n",seconds);
   //Wait some seconds
-  delay(seconds * 1000);
+ // delay(seconds * 1000);
 
    //reset settings
    esp_wifi_restore();
@@ -587,6 +655,7 @@ void firstConnectionToServer(){
     //Renable options for future connections
     insertMacIntoData();
     dataToSend.push_back(';');
+    dataToSend.push_back('\n');
 
      
 }
@@ -596,6 +665,7 @@ void loop() {
     gpio_set_level(LED_GPIO_PIN,level^=1);
     insertMacIntoData();
     dataToSend.push_back(';');
+    dataToSend.push_back('\n');
    
 
    if(firstConnection){

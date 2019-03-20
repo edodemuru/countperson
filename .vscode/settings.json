@@ -8,6 +8,10 @@
         "string": "cpp",
         "chrono": "cpp",
         "hash_set": "cpp",
-        "hash_map": "cpp"
+        "hash_map": "cpp",
+        "xstring": "cpp",
+        "vector": "cpp",
+        "list": "cpp",
+        "xhash": "cpp"
     }
 }
