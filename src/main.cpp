@@ -159,14 +159,17 @@ struct tm timeWork = {0};
 char tmFromServerChar[19];
 //Receipt buffer
 char dataReceived[64];
-
+//Vector containint the packet sniffed for hash calc
 vector<char> packetSniffed;
 
 const char* ntpServer = "time.windows.com";
 const long  gmtOffset_sec = 3600;
 const int   daylightOffset_sec = 0;
+//Is the esp32 connected to wifi?
+bool connected = false;
 
-void wifi_connect(){//collega la scheda alla rete wifi specificata
+//Connect Esp32 to wifi
+void wifi_connect(){
     wifi_config_t cfg = {
       .sta ={SSID,PASSPHARSE}
     };      
@@ -176,26 +179,35 @@ void wifi_connect(){//collega la scheda alla rete wifi specificata
             .password = PASSPHARSE,
         },
     };*/
-    ESP_ERROR_CHECK( esp_wifi_disconnect() );//mi disconnetto dalla rete alla quale eventualmente mi ero collegato in precedenza
-    ESP_ERROR_CHECK( esp_wifi_set_config(ESP_IF_WIFI_STA, &cfg) );//configurazione
-    ESP_ERROR_CHECK( esp_wifi_connect() );//mi connetto alla wifi
+    //Disconnect to any network the esp32 was connected before
+    ESP_ERROR_CHECK( esp_wifi_disconnect() );
+    //Set configuration
+    ESP_ERROR_CHECK( esp_wifi_set_config(ESP_IF_WIFI_STA, &cfg) );
+    //Connect to wifi
+    ESP_ERROR_CHECK( esp_wifi_connect() );
 }
 
 
 
 esp_err_t event_handler(void *ctx, system_event_t *event)
 {
- switch(event->event_id) {//analizzo l'id relativo all'evento
-    case SYSTEM_EVENT_STA_START://l'esp32 si è avviata
-        wifi_connect();//collego l'esp32 alla wifi
+ switch(event->event_id) {//Analysis of event ID
+    case SYSTEM_EVENT_STA_START://Called if esp_wifi_start returns ESP_OK
+        wifi_connect();//Connect esp32 to wifi
         break;
     case SYSTEM_EVENT_STA_GOT_IP://l'esp32 ha ricevuto l'IP dall'access point a cui si è connesso
+        printf("Ottenuto indirizzo ip");
         xEventGroupSetBits(wifi_event_group, CONNECTED_BIT);//setto il bit in modo da sbloccare i relativi task bloccati (???)
+        connected = true;
         break;
-    case SYSTEM_EVENT_STA_DISCONNECTED://l'esp32 si è disconnesso dall'access point
+    case SYSTEM_EVENT_STA_DISCONNECTED://Esp32 disconnected from access point
+        connected = false;
         esp_wifi_connect();
-        xEventGroupClearBits(wifi_event_group, CONNECTED_BIT);//pulisco i bit
+        //xEventGroupClearBits(wifi_event_group, CONNECTED_BIT);//pulisco i bit
+        
         break;
+    case SYSTEM_EVENT_STA_CONNECTED:
+    break;
     default:
         break;
     }
@@ -349,19 +361,16 @@ void insertChanIntoData(int num){
 //Function to insert rssi value into char vector
 void insertRssiIntoData(int rssi){
      if(rssi>-10){
-        dataToSend.push_back('-');
-        packetSniffed.push_back('-');
+        dataToSend.push_back('-');        
         dataToSend.push_back(rssi + '0');
-        packetSniffed.push_back(rssi + '0');
+       
     }else if(rssi>-100){
         char intchar[3];
         sprintf(intchar,"%d",rssi);
-        dataToSend.push_back(intchar[0]);
-        packetSniffed.push_back(intchar[0]);
-        dataToSend.push_back(intchar[1]);
-        packetSniffed.push_back(intchar[1]);
+        dataToSend.push_back(intchar[0]);        
+        dataToSend.push_back(intchar[1]);        
         dataToSend.push_back(intchar[2]);
-        packetSniffed.push_back(intchar[2]);
+        
     } else if(rssi == -100){
         char intchar[4];
         sprintf(intchar,"%d",rssi);
@@ -369,14 +378,10 @@ void insertRssiIntoData(int rssi){
         dataToSend.push_back(intchar[1]);
         dataToSend.push_back(intchar[2]);
         dataToSend.push_back(intchar[3]);
-        packetSniffed.push_back(intchar[0]);
-        packetSniffed.push_back(intchar[1]);
-        packetSniffed.push_back(intchar[2]);
-        packetSniffed.push_back(intchar[3]);
 
     }
     dataToSend.push_back(' ');
-    packetSniffed.push_back(' ');
+    
 }
 
 //Function to insert address into char vector
@@ -550,15 +555,23 @@ void setup() {
    esp_log_level_set("wifi", ESP_LOG_NONE); // disable wifi driver logging
   tcpip_adapter_init();
   
+  //Set wifi config
   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-  //Connection to wifi
+  //Init connection to wifi
   ESP_ERROR_CHECK( esp_wifi_init(&cfg) );
 
   ESP_ERROR_CHECK( esp_wifi_set_storage(WIFI_STORAGE_RAM) );
-
+  //Setup connection mode
   ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_STA));
+  //If this return ESP_OK, SYSTEM_EVENT_STA_START is called, this initialize the wifi module (?) 
   ESP_ERROR_CHECK( esp_wifi_start() );
-
+  printf("\nConnection to wifi\n");
+  while(!connected){
+    Serial.print(".");
+    delay(100);
+  }
+  printf("\nConnected!\n");
+  //Config internal timestamp
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
 
   //setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 0);
@@ -628,7 +641,7 @@ void waitTime(){
 
   printf("Number of seconds to wait : %1.f\n",seconds);
   //Wait some seconds
- // delay(seconds * 1000);
+  delay(seconds * 1000);
 
    //reset settings
    esp_wifi_restore();
@@ -665,7 +678,7 @@ void loop() {
     gpio_set_level(LED_GPIO_PIN,level^=1);
     insertMacIntoData();
     dataToSend.push_back(';');
-    dataToSend.push_back('\n');
+    
    
 
    if(firstConnection){
@@ -684,6 +697,13 @@ void loop() {
     //Set configuration for client   
     ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK( esp_wifi_start() );
+
+    printf("\nConnection to wifi\n");
+  while(!connected){
+    Serial.print(".");
+    delay(100);
+  }
+  printf("\nConnected!\n");
 
     //Activate socket and send data
     tcp_client();
