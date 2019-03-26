@@ -538,7 +538,7 @@ packetSniffed.push_back(' ');
     insertTimestampIntoData();
     calcHash();
     dataToSend.push_back(';');
-    dataToSend.push_back('\n');
+   // dataToSend.push_back('\n');
 	
 
 }
@@ -668,7 +668,7 @@ void firstConnectionToServer(){
     //Renable options for future connections
     insertMacIntoData();
     dataToSend.push_back(';');
-    dataToSend.push_back('\n');
+    //dataToSend.push_back('\n');
 
      
 }
