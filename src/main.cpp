@@ -142,7 +142,6 @@ boolean firstConnection;
 
 //Data to send to server
 vector<char> dataToSend;
-
 /*//Uri server ntp
 const char* ntpServer = "time.windows.com";
 //Offset seconds
@@ -303,8 +302,11 @@ void tcp_client(){
         printf("...connected\n");
         // Pointer to char vector
         char* dataTosendChar = &dataToSend[0];
+
+        int i =  write(s ,dataTosendChar, dataToSend.size());
+        printf("\n Dimension data sent: %d\n",i);
         //Send data
-        if( write(s ,dataTosendChar, dataToSend.size()) < 0)
+        if( i < 0)
         {
             ESP_LOGE(TAG, "... Send failed \n");
             close(s);
@@ -354,8 +356,8 @@ void insertChanIntoData(int num){
         dataToSend.push_back((num-10)+'0');
         packetSniffed.push_back((num-10)+'0');
     }
-    dataToSend.push_back(' ');
-    packetSniffed.push_back(' ');
+    dataToSend.push_back(',');
+    packetSniffed.push_back(',');
 }
 
 //Function to insert rssi value into char vector
@@ -380,7 +382,7 @@ void insertRssiIntoData(int rssi){
         dataToSend.push_back(intchar[3]);
 
     }
-    dataToSend.push_back(' ');
+    dataToSend.push_back(',');
     
 }
 
@@ -392,8 +394,8 @@ void insertAddrIntoData(uint8_t addr1,uint8_t addr2, uint8_t addr3, uint8_t addr
         dataToSend.push_back(addrChar[i]);
         packetSniffed.push_back(addrChar[i]);
     }
-    dataToSend.push_back(' ');
-    packetSniffed.push_back(' ');
+    dataToSend.push_back(',');
+    packetSniffed.push_back(',');
 }
 
 
@@ -422,8 +424,8 @@ void insertTimestampIntoData()
         packetSniffed.push_back(timestampCharData[i]);
     }
 
-    dataToSend.push_back(' ');
-    packetSniffed.push_back(' ');
+    dataToSend.push_back(',');
+    packetSniffed.push_back(',');
 
     
 }
@@ -508,8 +510,8 @@ else{
       }
     
     }
-dataToSend.push_back(' ');
-packetSniffed.push_back(' ');
+dataToSend.push_back(',');
+packetSniffed.push_back(',');
 
 //Print address,rssi and channel
   printf("PACKET TYPE=PROBE, CHAN=%02d, RSSI=%02d,"
@@ -689,6 +691,9 @@ void loop() {
 
     waitTime();
 
+    wifi_sniffer_set_channel(curChannel); //Change channel
+    
+
     printf("Start listening\n");
     vTaskDelay(WIFI_CHANNEL_SWITCH_INTERVAL / portTICK_PERIOD_MS);
     printf("End listening\n");
@@ -721,8 +726,8 @@ void loop() {
     
     //Change channel
     curChannel = (curChannel % WIFI_CHANNEL_MAX) + 1; //Set next channel
-    wifi_sniffer_set_channel(curChannel); //Change channel
-    printf("Current channel %d\n",curChannel);
+   // wifi_sniffer_set_channel(curChannel); //Change channel
+   // printf("Current channel %d\n",curChannel);
 
     
     
