@@ -60,8 +60,8 @@ using namespace std::chrono;
 //500 ms
 //#define	WIFI_CHANNEL_SWITCH_INTERVAL	(5000)
 //1 minute
-//#define	WIFI_CHANNEL_SWITCH_INTERVAL	(60000)
-#define	WIFI_CHANNEL_SWITCH_INTERVAL	(50000)
+#define	WIFI_CHANNEL_SWITCH_INTERVAL	(60000)
+//#define	WIFI_CHANNEL_SWITCH_INTERVAL	(50000)
 
 
 #define deltagrow 4         //termini per espansione lineare dell'array dinamico.//
@@ -300,6 +300,11 @@ void tcp_client(){
             continue;
         }
         printf("...connected\n");
+
+        dataToSend.push_back('E');
+        dataToSend.push_back('O');
+        dataToSend.push_back('F');
+
         // Pointer to char vector
         char* dataTosendChar = &dataToSend[0];
 
@@ -630,6 +635,7 @@ wifi_sniffer_set_channel(uint8_t channel)
 //Insert request of connection into dataToSend
 void insertConnectionRequest(){
     dataToSend.push_back('R');
+    dataToSend.push_back(';');
 }
 
 //Esp32 waits so that every esp32 starts at the same moment
